@@ -1,0 +1,344 @@
+\documentclass{article}
+\usepackage{hyperref}
+\usepackage{glossaries}
+\usepackage{biblatex}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{multirow}
+\usepackage[table]{xcolor}
+
+\newacronym{NS}{NS}{Needham–Schroeder}
+\newacronym{ACME}{ACME}{Automatic Certificate Management Environment}
+\newacronym[longplural={certificate authorities}]{CA}{CA}{certificate authority}
+\newacronym{PKI}{PKI}{public key infrastructure}
+\newacronym{DNS}{DNS}{Domain Name System}
+\newacronym{ADEM}{ADEM}{An Authenticated Digital EMblem}
+\newacronym{OTP}{OTP}{one-time password}
+\newacronym{KDC}{KDC}{key distribution center}
+\newacronym{AKA}{AKA}{authentication and key agreement}
+\newacronym{ICRC}{ICRC}{International Comittee of the Red Cross}
+
+\addbibresource{references.bib}
+
+\newcommand{\email}[1]{\href{mailto://#1}{\ttfamily #1}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{Research Plan, Felix E. Linker}
+\rhead{\today}
+\cfoot{\thepage}
+
+\makeatletter
+\renewcommand\maketitle{{
+  \raggedright
+  {\sffamily \large Research Plan:}\\[2ex]
+  {\sffamily \LARGE \@title}\\[4ex]
+  \begin{center}
+    \begin{tabular}{c c c}
+      {\itshape Student:} & \hspace{1cm} & {\itshape Supervisor:} \\
+      {Felix E. Linker} && {Prof. Dr. David Basin} \\
+      {\email{flinker@inf.ethz.ch}} && {\email{basin@inf.ethz.ch}}
+    \end{tabular}\\[4ex]
+    {\itshape Start of Matriculation and Employment}: July 1st, 2020
+  \end{center}
+  \par\noindent\rule{\textwidth}{0.4pt}
+}}
+\makeatother
+
+\title{(Advancing) Formal Verification of Authentication Protocols}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+  This document provides a research plan for the doctoral dissertation of Felix E. Linker.
+  We aim for two main lines of research in this dissertation.
+  First, the design and verification of \gls{ADEM} \cite{BlogADEM} and a messaging app authentication protocol.
+  We have already begun the design and analysis of the system \gls{ADEM}.
+  \Gls{ADEM} allows one to verify digital infrastructure as protected under international humanitarian law.
+  Additionally, \gls{ADEM} will provide a specification of how to endorse parties to protect their infrastructure accordingly.
+  The latter was inspired by the \gls{ACME} protocol \cite{ACMERFC}.
+  \Gls{ACME} likewise inspired us to pursue a messaging app authentication protocol, where users can authenticate each other by proving control over social media accounts.
+  Our second line of research is the advancement of the protocol verification tool Tamarin \cite{tamarin}.
+  Here, we plan to add better support for recursive models to Tamarin utilizing algebraic data types and structural induction.
+  Moreover, we will investigate the compartmentalisation of Tamarin models into multiple modules, facilitating the verification of infrastructure comprising multiple protocols.
+\end{abstract}
+
+\section{Introduction}
+
+The \gls{NS} protocol \cite{NeedhamSchroeder} and the \gls{ACME} protocol \cite{ACMERFC} illustrate the relevance of protocol verification:
+For the \gls{NS} protocol, a critical bug was only found years later \cite{NeedhamSchroederAttack}, and for the \gls{ACME} protocol formal verification managed to uncover a subtle flaw \cite{SeemsLegit}.
+These two examples together show that formal verification is not only powerful, but also that if not employed, critical bugs can go unnoticed to the public for years.
+
+Yet, automated protocol verification tools such as Tamarin \cite{tamarin} struggle in two areas: the verification of unbounded, looping, or recursive protocols, e.g., the Signal protocol \cite{SignalBlog}, and succinctly expressing and verifying the composition of protocols.
+To illustrate the latter problem, take the \gls{ACME} protocol as an example.
+The security of the modern Internet relies on many factors: how \glspl{CA} issue certificates, e.g., using \gls{ACME}, how certificates are checked by modern browsers, how certificates are distributed via TLS \cite{TLSRFC}, how certificate management is observed via certificate-transparency, how certificate-revocation is performed, etc.
+Attackers are not bound to break any single protocol's security properties to achieve their means.
+Security is well-known to be a non-monotonic property: Although system $A$ might satisfy $P$, and system $B$ might satisfy $P$, it is not guaranteed that all compositions of these two systems will satisfy $P$.
+Consequently, although the \gls{ACME} protocol may have been verified to meet certain properties, these properties could be the \textit{wrong} ones in context of the whole web \gls{PKI} \cite{WebPKIMissingLinks}.
+
+We hit both of these barriers of protocol verification while designing and verifying the system \gls{ADEM} \cite{BlogADEM}.
+\Gls{ADEM} tackles the challenge of transferring the idea of protective emblems, e.g., the red cross, into the digital world: \gls{ADEM} enables one to mark digital entities, such as virtual servers or laptops, as protected under international humanitarian law.
+The recursive aspect of \gls{ADEM}'s verification are certificate chains that are used to endorse legitimate claimants of protection.
+The composition aspect of \gls{ADEM}'s verification is its heterogenous nature.
+Showing a digital alternative of a red cross to the \textit{public} requires \gls{ADEM} not only to support a wide range of entities to mark as protected, but also a wide range of protocols to communicate these markings.
+Additionally, \gls{ADEM} relies on  the security of other protocols such as TLS, \gls{ACME}, and certificate transparency, and hence, composed analysis, taking all these parts into account would be desirable.
+
+While analyzing the interplay of \gls{ADEM} and the \gls{ACME} protocol, another research gap became apparent: while it is well known that using public key encryption, authentic channels can be transformed into secret channels (e.g., formalized in the \textit{channel calculus} \cite{ChannelCalculus}), a similar, canonical way to bootstrap authentic channels is not known.
+The well-known systematization of how to perform entity authentication for users by \textit{something you know} (e.g., passwords), \textit{something you have} (e.g., authenticators), or \textit{something you are} (e.g., biometrics) \cite{SomethingYou} provides a starting point.
+However, both this systematization and the channel calculus do not allow one to fully grasp what \gls{ACME} practically embodies: authentication by \textit{something you control} (in case of the \gls{ACME} protocol one must control a \gls{DNS} entry or IP address).
+
+A promising application of \textit{something you control} paradigm could be to bridge the gap of end-to-end authenticity in messaging applications such as Signal or WhatsApp.
+Both messengers provide strong confidentiality guarantees, \textit{given} that the channel is established with the right client.
+The client authentication, however, is only performed via SMS \glspl{OTP}.
+One can argue, that for most users, SMS authentication - although insecure \cite{SMSAuthInsecure} - is sufficient to provide them with high chances of connecting to the right clients.
+However, this not only assumes the security of SMS authentication, but also that users are able to exchange authentic phone numbers.
+A final line of research is to add stronger authenticity guarantees to messaging applications by providing clients with the ability to prove control over social media accounts.
+This way, a chat in a messaging app would not only be authenticated via a phone number, but also via Twitter, Google, or Facebook accounts.
+We believe that this not only improves the security of messaging applications, but also provides end-users with more understandable security guarantees: a messaging app chat should be secure as long as all authentication factors are secure, and end-users likely have a clear mental model for what it means to control a social media account.
+
+\section{State-of-the-Art}
+
+\subsection{Authentication Protocols}
+\label{sec:auth-protocols}
+
+First, we distinguish two meanings of the term ``authentication protocol''.
+It could mean to use a protocol as a channel to perform entity authentication, i.e., verifying who it is that one is communicating with (usually utilizing \textit{something you \dots}), or it could mean to provide protocols with authentication properties \cite{AuthenticationSpec}, which express in varying degrees that the communication partners agree on certain values if they successfully finish a run of their protocol.
+Authentication as a property is especially critical for \gls{AKA} protocols such as the 5G-\gls{AKA} protocol \cite{5GSpec}.
+
+\citeauthor{NetworkSecurityBook} \cite{NetworkSecurityBook} additionally discusses entity authentication from a different viewpoint than \textit{something you \dots}, namely the delegation of entity authentication to third parties by \textit{trusted intermediates}.
+In short, such intermediates do the job of entity authentication for you, e.g., using the \gls{ACME} protocol, and give you a ``receipt'' of this authentication, e.g., a certificate.
+\citeauthor{NetworkSecurityBook} distinguish three settings of trusted intermediates: \glspl{CA}, as in the well-known web \gls{PKI}, and both single and multiple \glspl{KDC}.
+The level of trust put into this intermediate depends on the concrete system.
+
+The authentication and delegation systems OAuth 2.0 \cite{OAuthRFC}, OpenID Connect \cite{OpenIdConnect}, Kerberos \cite{KerberosRFC}, and CONIKS \cite{Coniks} all implement a central trusted intermediate.
+Kerberos additionally supports the model of multiple trusted intermediates, supporting access ticket delegation.
+OAuth 2.0, OpenID Connect, and Kerberos are all concerned with granting users access to resources or services.
+In this model, a user requests access to a resource or service hosted by a so called \textit{relying party}.
+The relying party has offloaded the duty of authentication to one of these system.
+To gain access, the users authenticates to the system and is handed an access token or ticket that can be checked by the relying party in collaboration with the trusted intermediate.
+
+CONIKS on the other hand focusses on providing users with authentic public keys for other users of a same service.
+In doing so, it tries to tackle a similar problem as the web PKI.
+ClaimChain \cite{ClaimChain} tries to solve the same problem as CONIKS, but is fully distributed and, hence, does not implement any trusted intermediate.
+Both CONIKS and ClaimChain aim to provide authentic public keys by focussing on key consistency, i.e., that everyone agrees on the key associated with an identity.
+In CONIKS, the consistency is expected to be maintained by a central provider, whereas in ClaimChain, every user is monitored to ensure that consistent claims are made about other users' keys.
+
+\subsection{Protocol Verification}
+
+There are three main protocol verification tools in the symbolic model: Tamarin \cite{tamarin}, ProVerif \cite{ProVerif}, and DY* \cite{DYStar}.
+In the symbolic model, messages are represented by terms.
+Atomic messages are represented by \emph{symbolic} variables and
+operations on messages are represented by functions, e.g., an encrypted message \texttt{m} is represented by the term \texttt{enc(m, k)}.
+To reason about the effects of computation, usually, equational theories are employed.
+Equational theories induce equivalence classes among terms.
+For example, the term \texttt{dec(enc(m, k), k)} resembling the decryption of the encryption of message \texttt{m} under key \texttt{k} is axiomatized to be equal to \texttt{m}.
+
+Protocol verification tools in the symbolic model make the \textit{perfect cryptography assumption}, which, for example, states that messages can be decrypted if and only if one knows the decryption key.
+These assumptions are not made when protocols are proven to be correct in the \textit{computational model}.
+In this model, though, proofs are much more subtle, complex, and manual.
+Security proofs in the symbolic model should not be interpreted as proofs of definite security, but the symbolic model has proven its value by uncovering real bugs in real protocols \cite{SeemsLegit,MastercardTamarin}.
+
+Tamarin uses multiset rewriting in the symbolic model and evaluates security properties as constraint systems using backwards search.
+ProVerif uses the applied pi calculus as an input language and evaluates security properties as Horn clauses.
+There exists a compiler from the applied calculus to Tamarin multiset rewriting theories, making Tamarin and ProVerif highly comparable.
+Hence, in this paragraph, we focus on the differences of ProVerif and Tamarin.
+In contrast to Tamarin, ProVerif supports symbolic model of bit strings, e.g., allowing the detection of type-flaw attacks.
+In ProVerif, the decryption of an arbitrary term can return ``garbage'', whereas in Tamarin, it merely is represented as a term to which no further equations can be applied.
+In contrast to ProVerif, however, Tamarin is more interactive.
+Tamarin allows manual proofs of models, which facilitates debugging, but also allows to complete proofs that could not have been found by any of Tamarin's heuristics.
+
+Whereas ProVerif was less interactive than Tamarin, DY* is on the other end of the spectrum and almost completely manual.
+DY* is written in the dependently typed, functional programming language F* \cite{FStar}.
+DY* provides a framework within F* to encode and verify protocols.
+DY* is powerful, but only supports one proof strategy that must be supported by manually annotating invariants, shifting the majority of the burden to the modeller.
+
+\subsection{Formal Methods \& Automated Induction}
+
+Protocol verification is a subfield in the vast area of formal methods.
+In this section, we investigate three other lines of research in the area of formal methods: program verification, interactive theorem proving, and general purpose model checkers.
+
+Program verification, for example as performed by the Viper tool \cite{Viper}, is related to our field of research for two reasons:
+First, models in Tamarin could be read both as non-deterministic functional or logic programs.
+Second, program verification has long been tackling the problems of automated induction and modular verification.
+An immediate difference between protocol and program verification is that in the latter case, a machine-readable model ``comes for free'', i.e., someone has written code that must now be verified.
+This makes programs usually much more complex, facilitating the need for modular verification.
+Program verification tools usually tackle this complexity additionally by requiring manual annotations from programmers, e.g., in the case of Viper, pre- and post-conditions.
+Due to this high reliance on manual annotations, proofs of induction about, e.g., loops in programs are mostly interactive.
+The user is required to annotate loops with sufficiently strong invariants or the proof will not succeed.
+
+The works of \citeauthor{ThesisInaKraan} \cite{ThesisInaKraan} on logic programming, and the theorem provers NQTHM \cite{NQTHM} and ACL2 \cite{ACL2} for Common LISP can also be considered as program verification tools.
+However, \citeauthor{ThesisInaKraan} \cite{ThesisInaKraan} puts special emphasis on logic program synthesis alongside the synthesized program's verification.
+All three tools, though, focus on automated proofs by induction, for example, the theorem provers NQTHM and ACL2 famously introduced the Boyer-Moore-Waterfall, a scheme to automate induction.
+
+General purpose model checkers, such as Alloy \cite{AlloyBook}, nuXmv \cite{nuXmv}, or TLA+ \cite{TLAPlus}, are similar to Tamarin - a model checker itself.
+Interestingly, these model checkers all support partitioning formal models, e.g., into modules, which is not supported by Tamarin.
+Although these model checkers are general purpose, they each come with a targeted verification domain.
+Alloy focusses on object oriented programming models, nuXmv on hardware verification, and TLA+ on concurrent algorithms.
+
+\section{Goals of Thesis}
+
+We plan two follow two main lines of research: the design and verification of authentication protocols, and advancing the verification of such protocols.
+These two lines go hand-in-hand, as the gaps in protocol verification were uncovered by the design of the new authentication protocols.
+
+\subsection{Formal Verification of Authentication Protocols}
+
+\paragraph{Research questions.}
+The development of \gls{ADEM} was inspired by the web \gls{PKI}, and - in part - relies on it.
+It follows the model of \glspl{CA} as trusted intermediates.
+\Gls{ADEM} builds on top of well-established technology, e.g., \gls{ACME}, the web \gls{PKI}, and TLS, but combines them in a unique way due to its unique constraints that arise from the humanitarian context.
+The question that has not been answered so far: How can such novel combinations of existing technology can be accounted for in protocol verification?
+
+\Gls{ACME} pioneered the approach of establishing authenticity-over-control.
+What has been considered so far, is how this approach can be generalized, applied in different contexts, and systematized in comparison to other entity authentication mechanisms.
+In our research, we plan to expand the scope of authenticity-over-control, by prototyping the approach for end-user authentication in messaging apps.
+Additionally, we plan to investigate other usage contexts in which \gls{ADEM} could be used.
+If the semantics of emblems in \gls{ADEM} would be changed to not signal protection, but rather prove affiliation to arbitrary entities (to companies, groups, the government, \dots), the architecture might be deployed in scenarios that provide no possibility for automated authentication so far.
+
+\paragraph{Methods and contributions.}
+We will found the development of these systems on rigorous requirements engineering, system specification, prototype implementation, and formal verification of the underlying models.
+We expect to make three main contributions: the design, implementation and verification of \gls{ADEM} and a messaging app authentication protocol, and a systematization of the notion authenticity-over-control.
+
+\subsection{Advancing Protocol Verification}
+
+\paragraph{Research questions.}
+The goal of this thesis is to advance protocol verification in two ways: supporting more powerful induction schemes to improve the handling of recursive models, and supporting better was to modularize Tamarin models such that the composition of protocols can be analyzed more clearly.
+We decided to extend Tamarin, because it strikes the perfect balance between interactivity and automation in comparison to ProVerif and DY*.
+It is well-known that no scheme for automated induction can be complete \cite{InductionBundy}.
+Furthermore, our induction scheme will be based on heuristics.
+Leveraging the interactive mode of Tamarin will allow modelers to gain insight into the attempts of Tamarin to proof lemmata by induction, noticing non-termination or manually guiding the tool whenever heuristics fail.
+
+The works on logic programming and Common LISP theorem proving have shown that powerful heuristics for automated induction exist, however, given the nature of the problem, they cannot be expected to work at every time.
+Our goal is to build on this research and apply it to Tamarin, with the hopes of not only providing better induction schemes, but maybe also uncovering particular types of models for which automated induction works especially well.
+
+Modular verification is implemented in Viper, and was performed using the theorem prover Isabelle \cite{Isabelle,Igloo}.
+At the same time, many general purpose model checkers provide the option to modularize and plug together different models.
+However, specification composition is not straight-forward.
+Although Tamarin supports lemmata marked as ``reuse'', which could facilitate model compositions, it remains unclear, how approaches of modularization could be adopted to Tamarin models.
+A final goal of this thesis is to investigate if both notions of modular verification (separating Tamarin into modules itself, and performing verification piece by piece) are feasible in Tamarin.
+
+\paragraph{Methods and contributions.}
+The contributions of a more powerful protocol verification tool are obvious: protocols can be verified more accurately and more efficiently, both in terms computational power and modeling effort.
+
+Extending Tamarin with new features requires four kinds of work.
+For every addition to Tamarin, in a first step, its syntax and semantics need to be defined, and how automated verification strategies can deal with these features.
+Second, the new features must be implemented.
+Third, their soundness must be proven.
+And fourth, the new features need to be evaluated, preferably on case studies.
+
+\section{Work Plan}
+
+We divide the goals of our thesis into four projects: the design and analysis of \gls{ADEM}, the design and analysis of a messaging app authentication protocol, improving Tamarin's handling of recursive models, and adding support for modularization to Tamarin.
+We lay out a detailed work schedule at the end of this section in Table~\ref{tbl:schedule}.
+
+\subsection{\gls{ADEM}}
+
+The \gls{ADEM} project comprises three work packages.
+These cannot be clearly separated from each other, but should overall not take more than 12 months.
+The design and implementation of \gls{ADEM} constitutes the first work package.
+The second work package is given by the formal verification of \gls{ADEM} as a whole.
+To pursue the standardization of \gls{ADEM} in an international context marks the third and final work package.
+We note, that the time needed for this final work package cannot be estimated accurately, as it is highly dependent on external factors.
+We expect, though, that standardization will go in parallel with all other work packages.
+
+The design of \gls{ADEM} has seen good progress, and we have taken first steps towards a standardization of the protocol.
+\Gls{ADEM} comprises multiple protocols, and each of them has been at least sketched as a design.
+Partially, the protocols have already been subject to external feedback, e.g., from the \gls{ICRC}.
+In parallel, we are investigating user stories helping us to design \gls{ADEM}'s practical aspects, e.g., deployment in context of a humanitarian mission.
+
+\subsection{Messaging App Authentication}
+
+Given that this project has a much narrower scope than \gls{ADEM}, we group it as a single work package that comprises both the exploration of existing technologies that could solve similar problems, the formal analysis of our approach, and the implementation as a prototype.
+Overall, we expect this work package to take 6 months.
+
+We already finished a rough analysis of the authentication process's requirements, especially the criticality of privacy.
+Additionally, we identified existing components in the Internet's infrastructure that we might be able to alter or use to deploy the protocol.
+Currently, we are investigating the trade-offs between these components, how much provider buy-in would be required, and what kind of properties they offer.
+
+\subsection{Verifying Recursive Models in Tamarin}
+
+As mentioned in the previous section, we plan to add better support for recursive models to Tamarin in two steps.
+First, we plan to add algebraic data types to Tamarin.
+Second, we plan to add structural induction schemes on algebraic data types to Tamarin.
+Each of these steps constitutes a work package.
+For both steps, we plan to first define clear motivational examples in the form of case studies that either cannot be modelled or proven in Tamarin currently, are very cumbersome to model, or require a considerate manual intervention or computing resources to be verified.
+In a subsequent step, we define the syntax and user interface of Tamarin's new features, and finally, how automated proving shall be performed.
+For these additions, we will provide soundness proofs, ensuring that the new theories deliver correct results.
+Finally, Tamarin's new features need to be implemented and evaluated both with respect to performance and to the case studies identified earlier.
+We expect both work packages to take 4 months each.
+
+For both the addition of algebraic data types, and the support of structural induction, we identified motivating examples, sketched examples illustrating the syntax envisioned, and implemented case-study-level prototypes.
+All these steps demonstrate the feasibility of our idea.
+Next up are the detailed analysis of the case studies, especially in light of the current possibilities of protocol verification tools.
+
+\subsection{Modular Models in Tamarin}
+This research goal constitutes a single work package.
+In general, we expect the same steps to be taken as layed out in the previous paragraph.
+However, the design of the syntax needs to be considered with special caution.
+As a new first step, existing models that are often reused, such as TLS, will be investigated.
+We will face the questions: Can interfaces to protocol models be defined?
+Can Tamarin's modeling features be unified such that these interfaces are expected to behave uniformly for different models?
+Can existing lemmata be reused to facilitate new proofs?
+And most critically, does a new compositional approach provide any value over the naive approach of abstracting components manually as channels that are assumed to provide certain properties?
+We believe that this work can be tackled within 6 months.
+
+\newcommand{\cc}{\cellcolor{black!10}}
+\begin{table}[b]
+  \centering
+  \begin{tabular}{|c c|c c|c c c c|c c c c|}
+    \hline
+    & & \multicolumn{2}{c|}{2021} & \multicolumn{4}{c|}{2022} & \multicolumn{4}{c|}{2023} \\
+    & & Past & Q4 & Q1 & Q2 & Q3 & Q4 & Q1 & Q2 & Q3 & Q4 \\
+    \hline
+    \multirow{4}{*}{\gls{ADEM}} & Design & \cc & \cc & \cc & \cc & \cc & & & & & \\
+    & Verification & \cc & \cc & \cc & \cc & \cc & & & & & \\
+    & Standardization & \cc & \cc & \cc & \cc & \cc & & & & & \\
+    \hline
+    \multicolumn{2}{|c|}{Messaging Authentication} & \cc & \dots & \dots & \dots & \cc & \cc & \cc & & & \\
+    \hline
+    \multirow{2}{*}{Recursion} & ADTs & \cc & \cc & \cc & & & & & & & \\
+    & Induction & \cc & \dots & \cc & \cc & & & & & & \\
+    \hline
+    \multicolumn{2}{|c|}{Modularization} & & & & & \cc & \cc & \cc & & & \\
+    \hline
+  \end{tabular}
+  \caption{Detailed Work Schedule}
+  \label{tbl:schedule}
+\end{table}
+
+\subsection{Expected Publications}
+
+We estimate that each of our projects could result in a publication containing its results.
+From the outset, it is hard to judge how many results will come out of each of these projects.
+Maybe, different projects can be combined into a single publication, e.g., \gls{ADEM} serves as a motivational example for better handling of recursive models in Tamarin.
+In total, we expect to end with the following \textit{publishable results}:
+\begin{itemize}
+  \item Design and verification of \gls{ADEM}
+  \item Design and verification of messaging app authentication
+  \item Systematization of authentication-over-control
+  \item Addition of algebraic data types to Tamarin
+  \item Addition of structural induction schemes to Tamarin
+  \item Addition of modularization to Tamarin
+\end{itemize}
+
+\section{Additional Information}
+
+I have finished my study programme as a doctoral student by attending the courses 252-1414-00S \textit{System Security} (7 ECTS), and 263-4660-00S \textit{Applied Cryptography} (8 ECTS).
+I assist the teaching of the courses 252-0463-00L \textit{Security Engineering}, and 252-0058-00L \textit{Formal Methods and Functional Programming} where I give exercises session for half a semester each.
+I have no other duties.
+
+\printbibliography
+
+\newpage
+\section*{Signatures}
+
+\vspace{2cm}
+\begin{center}
+  \def\arraystretch{1.5}
+  \begin{tabular}{r p{0.37\textwidth} p{0.02\textwidth} r p{0.37\textwidth}}
+    \cline{1-2} \cline{4-5}
+    Date & Felix E. Linker (\textit{Student}) & ~ & Date & Prof. Dr. David Basin (\textit{Supervisor})
+  \end{tabular}
+\end{center}
+
+\end{document}
